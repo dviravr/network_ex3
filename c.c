@@ -3,9 +3,27 @@
 #include <stdlib.h> 
 #include <string.h> 
 #include <sys/socket.h> 
+#include <netinet/tcp.h> 
 #define MB 1024 * 1024
 #define PORT 8080 
 #define SA struct sockaddr 
+
+void changeCC(int sock) 
+{
+	char reno[256] = "reno";
+	socklen_t len = strlen(reno);
+	if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, reno, len) != 0) {
+		perror("setsockopt"); 
+		return -1;
+	}
+	len = sizeof(reno); 
+	if (getsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, reno, &len) != 0) {
+		perror("getsockopt"); 
+		return -1; 
+	} 
+	printf("New CC: %s\n", reno); 
+}
+
 void func(FILE *fp, int sockfd) 
 { 
 	char buff[MB]; 
@@ -13,20 +31,19 @@ void func(FILE *fp, int sockfd)
 
 	for (;;) { 
 		bzero(buff, sizeof(buff)); 
-		printf("Enter the string : "); 
 
 		while(fgets(buff, MB, fp) != NULL) 
 			; 
-		write(sockfd, buff, sizeof(buff)); 
+		long sent = write(sockfd, buff, sizeof(buff)); 
 		bzero(buff, sizeof(buff)); 
-		read(sockfd, buff, sizeof(buff)); 
-		printf("got from Server : %lu\n", sizeof(buff)); 
-		if (i >= 4)
+		long got = read(sockfd, buff, sizeof(buff)); 
+		printf("send to server %ld bytes\n", sent); 
+		printf("got from server %ld bytes\n", got); 
+		if (i++ >= 4)
         {
             printf("Server Exit...\n");
             break;
         }
-        i++;
 	} 
 } 
 
@@ -58,13 +75,16 @@ int main()
 	else
 		printf("connected to the server..\n"); 
 
-    char* fileName = "1mb.txt";
+    char* fileName = "1m.txt";
 	FILE *fp;
 	fp = fopen(fileName, "r");
 
 	// function for chat 
-	func(fp, sockfd); 
+	func(fp, sockfd);
 
+	changeCC(sockfd);
+
+	func(fp, sockfd);
 	// close the socket 
 	close(sockfd); 
 } 

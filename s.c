@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <netinet/tcp.h> 
 #include <time.h> 
 #define MAX 1024 * 1024
 #define PORT 8080
@@ -15,9 +16,10 @@ void func(int sockfd)
 {
     char buff[MAX];
     clock_t t;
-    int i = 0;
+    size_t i;
+    double avgTime = 0;
     // infinite loop for chat
-    for (;;)
+    for (i = 0; i < 5; i++)
     {
         bzero(buff, MAX);
 
@@ -27,6 +29,7 @@ void func(int sockfd)
         // print buffer which contains the client contents
         t = clock() - t;
         double time = ((double) t) / CLOCKS_PER_SEC * 1000;
+        avgTime += time;
         printf("it's took %lf ms to get the file\n", time);
         printf("got from client: %lu bytes\n", sizeof(buff));
         // bzero(buff, MAX);
@@ -37,7 +40,26 @@ void func(int sockfd)
         // and send that buffer to client
         write(sockfd, buff, sizeof(buff));
     }
+    avgTime /= i;
+    printf("average time of %lf ms\n", avgTime);
 }
+
+void changeCC(int sock) 
+{
+	char reno[256] = "reno";
+	socklen_t len = strlen(reno);
+	if (setsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, reno, len) != 0) {
+		perror("setsockopt"); 
+		return -1;
+	}
+	len = sizeof(reno); 
+	if (getsockopt(sock, IPPROTO_TCP, TCP_CONGESTION, reno, &len) != 0) {
+		perror("getsockopt"); 
+		return -1; 
+	} 
+	printf("New CC: %s\n", reno); 
+}
+
 
 // Driver function
 int main()
@@ -93,6 +115,9 @@ int main()
     // Function for chatting between client and server
     func(connfd);
 
+    changeCC(sockfd);
+
+    func(connfd);
     // After chatting close the socket
     close(sockfd);
 }
